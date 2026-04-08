@@ -43,6 +43,34 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+MCP_ADD_MODE=""
+
+detect_mcp_add_mode() {
+  [[ -n "$MCP_ADD_MODE" ]] && return 0
+
+  local help_output=""
+  help_output="$(codex mcp add --help 2>/dev/null || true)"
+  # 兼容不同 Codex CLI 版本：新版本直接 `codex mcp add <name> -- ...`，老版本可能仍要求 scope 参数。
+  if printf '%s\n' "$help_output" | grep -Eq -- '(^|[[:space:]])-s,|--scope'; then
+    MCP_ADD_MODE="legacy_scope"
+  else
+    MCP_ADD_MODE="current"
+  fi
+}
+
+run_codex_mcp_add() {
+  local name="$1"
+  shift
+
+  detect_mcp_add_mode
+
+  if [[ "$MCP_ADD_MODE" == "legacy_scope" ]]; then
+    codex mcp add "$name" -s user -- "$@"
+  else
+    codex mcp add "$name" -- "$@"
+  fi
+}
+
 ensure_mcp_server() {
   local current="$1"
   local name="$2"
@@ -54,7 +82,7 @@ ensure_mcp_server() {
   fi
 
   echo "Installing MCP server: $name"
-  if ! "$@"; then
+  if ! run_codex_mcp_add "$name" "$@"; then
     echo "Failed to install MCP server: $name" >&2
     MCP_INSTALL_ERRORS=$((MCP_INSTALL_ERRORS + 1))
   fi
@@ -71,15 +99,15 @@ install_core_mcp() {
   current="$(codex mcp list 2>/dev/null || true)"
 
   ensure_mcp_server "$current" sequential-thinking \
-    codex mcp add sequential-thinking -s user -- npx -y @modelcontextprotocol/server-sequential-thinking
+    npx -y @modelcontextprotocol/server-sequential-thinking
   ensure_mcp_server "$current" desktop-commander \
-    codex mcp add desktop-commander -s user -- npx -y @wonderwhy-er/desktop-commander
+    npx -y @wonderwhy-er/desktop-commander
   ensure_mcp_server "$current" context7 \
-    codex mcp add context7 -s user -- npx -y @upstash/context7-mcp
+    npx -y @upstash/context7-mcp
   ensure_mcp_server "$current" playwright \
-    codex mcp add playwright -s user -- npx -y @playwright/mcp@latest
+    npx -y @playwright/mcp@latest
   ensure_mcp_server "$current" exa \
-    codex mcp add exa -s user -- npx -y exa-mcp-server
+    npx -y exa-mcp-server
 }
 
 require_repo_file "$ROOT/bin/codex-init-project"

@@ -15,7 +15,7 @@ git clone <private-repo-url>
 cd codex-bootstrap
 chmod +x install.sh sync-from-local.sh bootstrap-check.sh bin/codex-init-project
 ./install.sh
-source ~/.zshrc
+source ~/.zshrc  # 或 source ~/.bashrc
 ```
 
 `install.sh` 会自动做三件事：
