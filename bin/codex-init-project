@@ -59,6 +59,17 @@ if [[ ! -d "$TEMPLATE_DIR" ]]; then
   exit 1
 fi
 
+ensure_path_is_dir_or_absent() {
+  local path="$1"
+  local label="$2"
+  if [[ -e "$path" && ! -d "$path" ]]; then
+    # 这里显式拦截“同名普通文件挡住目标目录”的情况，避免 mkdir 直接抛出难懂的系统报错。
+    echo "Path conflict: $path exists and is not a directory ($label)." >&2
+    echo "Move or remove it, then rerun codex-init-project." >&2
+    exit 1
+  fi
+}
+
 detect_stack() {
   local dir="$1"
   if [[ -f "$dir/Cargo.toml" ]]; then
@@ -217,6 +228,10 @@ write_if_missing() {
 STACK="$(detect_stack "$TARGET_DIR")"
 STACK_OUTPUTS="$(stack_outputs "$STACK" | json_list)"
 STACK_RISKS="$(stack_risks "$STACK" | json_list)"
+
+ensure_path_is_dir_or_absent "$TARGET_DIR/.codex" ".codex"
+ensure_path_is_dir_or_absent "$TARGET_DIR/.agents" ".agents"
+ensure_path_is_dir_or_absent "$TARGET_DIR/.agents/skills" ".agents/skills"
 
 copy_file "$TEMPLATE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
 copy_file "$TEMPLATE_DIR/.codex/AGENTS.md" "$TARGET_DIR/.codex/AGENTS.md"

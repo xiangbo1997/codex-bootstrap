@@ -99,6 +99,7 @@ codex-init-project --trust .
 - `Missing template directory`：说明 `~/.codex/templates/project-bootstrap` 没装好
 - `gh auth status` 失败：重新执行 `gh auth login`
 - `codex mcp list` 缺核心服务：按全局 `codex-init-protocol` 补装
+- `Path conflict: <path> exists and is not a directory`：说明目标项目里已有同名文件占用了 `.codex` 或 `.agents` 路径，先移动或删除该文件，再重新执行初始化
 
 补充说明：
 - `install.sh` 会自动兼容不同 Codex CLI 的 `codex mcp add` 参数格式
