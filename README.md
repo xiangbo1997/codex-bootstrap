@@ -13,16 +13,23 @@
 ```bash
 git clone <private-repo-url>
 cd codex-bootstrap
-chmod +x install.sh sync-from-local.sh bin/codex-init-project
+chmod +x install.sh sync-from-local.sh bootstrap-check.sh bin/codex-init-project
 ./install.sh
 source ~/.zshrc
 ```
+
+`install.sh` 会自动做三件事：
+- 安装 `codex-init-project` 与全局 `~/.codex` 模板/skills
+- 自动补齐 `~/.local/bin` 到 shell PATH
+- 尝试自动补装核心 MCP，并在安装结束后执行一次自检
 
 ## 验证
 ```bash
 command -v codex-init-project
 codex-init-project --help
 codex mcp list
+./bootstrap-check.sh
+./bootstrap-check.sh --smoke-test
 ```
 
 ## 新电脑首次安装检查清单
@@ -74,10 +81,7 @@ codex mcp list
 
 ### 5. 用一个临时目录做冒烟测试
 ```bash
-mkdir -p /tmp/codex-bootstrap-demo
-cd /tmp/codex-bootstrap-demo
-codex-init-project .
-find . -maxdepth 3 | sort
+./bootstrap-check.sh --smoke-test
 ```
 
 预期至少能看到：
