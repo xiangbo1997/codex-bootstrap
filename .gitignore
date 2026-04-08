@@ -3,5 +3,6 @@
 *.tmp
 
 # 临时文件
+/.codex
 tmp/
 dist/
