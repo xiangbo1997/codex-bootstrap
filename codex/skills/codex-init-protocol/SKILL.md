@@ -22,14 +22,18 @@ Run this protocol before doing real work. It aligns Codex with the baseline laws
 
    | Server | Install Command |
    | --- | --- |
-   | sequential-thinking | `codex mcp add sequential-thinking -s user -- npx -y @modelcontextprotocol/server-sequential-thinking` |
-   | desktop-commander | `codex mcp add desktop-commander -s user -- npx -y @wonderwhy-er/desktop-commander` |
-   | context7 | `codex mcp add context7 -s user -- npx -y @upstash/context7-mcp` |
-   | playwright | `codex mcp add playwright -s user -- npx -y @playwright/mcp@latest` |
-   | exa | `codex mcp add exa -s user -- npx -y exa-mcp-server` |
+   | sequential-thinking | `codex mcp add sequential-thinking -- npx -y @modelcontextprotocol/server-sequential-thinking` |
+   | desktop-commander | `codex mcp add desktop-commander -- npx -y @wonderwhy-er/desktop-commander` |
+   | context7 | `codex mcp add context7 -- npx -y @upstash/context7-mcp` |
+   | playwright | `codex mcp add playwright -- npx -y @playwright/mcp@latest` |
+   | exa | `codex mcp add exa -- npx -y exa-mcp-server` |
+
+   Notes:
+   - On current Codex CLI builds, use `codex mcp add <name> -- <command>...`.
+   - Some older builds may still require an explicit scope flag such as `-s user`.
 
 3. Optional: install `mcp-deepwiki`, `mcp-feedback-enhanced`, `notion` when the task needs them.
-4. Re-run `codex mcp list` to confirm everything shows **Connected**, and log whether each server was “already installed” or “newly installed”.
+4. Re-run `codex mcp list` to confirm every core server is present and enabled/configured (some versions may show `Connected`, others may show `enabled`), and log whether each server was “already installed” or “newly installed”.
 
 ## Step 2 – Permission Sync
 
@@ -45,7 +49,7 @@ Run this protocol before doing real work. It aligns Codex with the baseline laws
 
 Run this quick self-test before claiming the init is “done”:
 
-- All core MCP servers show as connected in `codex mcp list` (call out any optional servers intentionally skipped).
+- All core MCP servers appear in `codex mcp list` with an active status (for example `Connected` or `enabled`; call out any optional servers intentionally skipped).
 - `.codex/settings.local.json` reflects the required `allow` + `ask` entries.
 - `.codex/context-scan.json` and `.codex/context-current.json` exist with up-to-date snapshots (captured via `ls -R`/`rg` or equivalent).
 - `.codex/plan.md`, `.codex/operations-log.md`, and `.codex/verification.md` reflect the latest init state or explicitly note “init only”.

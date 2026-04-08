@@ -64,7 +64,7 @@ codex-init-project --help
 如果找不到命令，重新加载 shell：
 
 ```bash
-source ~/.zshrc
+source ~/.zshrc  # 或 source ~/.bashrc
 ```
 
 ### 4. MCP 服务器是否齐全
@@ -99,6 +99,10 @@ codex-init-project --trust .
 - `Missing template directory`：说明 `~/.codex/templates/project-bootstrap` 没装好
 - `gh auth status` 失败：重新执行 `gh auth login`
 - `codex mcp list` 缺核心服务：按全局 `codex-init-protocol` 补装
+
+补充说明：
+- `install.sh` 会自动兼容不同 Codex CLI 的 `codex mcp add` 参数格式
+- `codex-init-project` 现在使用 `bash` 启动，不再依赖 `/bin/zsh`
 
 ## 从当前机器刷新仓库快照
 ```bash
