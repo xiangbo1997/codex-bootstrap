@@ -1,0 +1,236 @@
+#!/bin/zsh
+set -euo pipefail
+
+FORCE=0
+TRUST=0
+TRUST_LEVEL="trusted"
+TARGET_INPUT='.'
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force)
+      FORCE=1
+      shift
+      ;;
+    --trust)
+      TRUST=1
+      shift
+      ;;
+    --trust-level)
+      TRUST=1
+      TRUST_LEVEL="${2:-}"
+      if [[ -z "$TRUST_LEVEL" ]]; then
+        echo "Missing value for --trust-level" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: codex-init-project [--force] [--trust] [--trust-level trusted|untrusted] [target_dir]
+
+Initialize a project for Codex using the shared template in ~/.codex/templates/project-bootstrap.
+
+Options:
+  --force                 Overwrite managed files if they already exist
+  --trust                 Register the target project in ~/.codex/config.toml as trusted
+  --trust-level <level>   Register the target project with a specific trust level
+  -h, --help              Show this help message
+USAGE
+      exit 0
+      ;;
+    *)
+      TARGET_INPUT="$1"
+      shift
+      ;;
+  esac
+done
+
+TEMPLATE_DIR="$HOME/.codex/templates/project-bootstrap"
+TARGET_DIR="$(cd "$TARGET_INPUT" 2>/dev/null && pwd || true)"
+
+if [[ -z "$TARGET_DIR" ]]; then
+  echo "Target directory not found: $TARGET_INPUT" >&2
+  exit 1
+fi
+
+if [[ ! -d "$TEMPLATE_DIR" ]]; then
+  echo "Missing template directory: $TEMPLATE_DIR" >&2
+  exit 1
+fi
+
+detect_stack() {
+  local dir="$1"
+  if [[ -f "$dir/Cargo.toml" ]]; then
+    echo "rust"
+    return
+  fi
+  if [[ -f "$dir/package.json" ]]; then
+    echo "node"
+    return
+  fi
+  if [[ -f "$dir/pyproject.toml" || -f "$dir/requirements.txt" ]]; then
+    echo "python"
+    return
+  fi
+  if [[ -f "$dir/go.mod" ]]; then
+    echo "golang"
+    return
+  fi
+  if [[ -f "$dir/Package.swift" ]]; then
+    echo "swift"
+    return
+  fi
+  echo "generic"
+}
+
+stack_risks() {
+  case "$1" in
+    rust)
+      printf '%s\n' '"dependency audit"' '"unsafe blocks review"' '"API error handling"'
+      ;;
+    node)
+      printf '%s\n' '"runtime env validation"' '"dependency audit"' '"type/lint drift"'
+      ;;
+    python)
+      printf '%s\n' '"virtualenv consistency"' '"dependency pinning"' '"runtime input validation"'
+      ;;
+    golang)
+      printf '%s\n' '"goroutine leaks"' '"config validation"' '"error wrapping consistency"'
+      ;;
+    swift)
+      printf '%s\n' '"async state handling"' '"build target drift"' '"secret storage"'
+      ;;
+    *)
+      printf '%s\n' '"missing project conventions"' '"verification gaps"' '"config drift"'
+      ;;
+  esac
+}
+
+stack_outputs() {
+  case "$1" in
+    rust)
+      printf '%s\n' '"cargo fmt"' '"cargo check"' '"cargo test"'
+      ;;
+    node)
+      printf '%s\n' '"lint"' '"typecheck"' '"test"'
+      ;;
+    python)
+      printf '%s\n' '"ruff/format"' '"pytest"' '"import/runtime validation"'
+      ;;
+    golang)
+      printf '%s\n' '"go fmt"' '"go test"' '"go vet"'
+      ;;
+    swift)
+      printf '%s\n' '"swift build"' '"swift test"' '"package validation"'
+      ;;
+    *)
+      printf '%s\n' '"project-specific verification"'
+      ;;
+  esac
+}
+
+json_list() {
+  awk 'BEGIN { first = 1 } { if (!first) printf(",\n"); printf("    %s", $0); first = 0 }'
+}
+
+register_project_trust() {
+  local config_path="$HOME/.codex/config.toml"
+  local target_dir="$1"
+  local trust_level="$2"
+  mkdir -p "$(dirname "$config_path")"
+
+  if [[ ! -f "$config_path" ]]; then
+    printf '[projects."%s"]\ntrust_level = "%s"\n' "$target_dir" "$trust_level" > "$config_path"
+    echo "write $config_path"
+    return
+  fi
+
+  local escaped_target
+  escaped_target=$(printf '%s\n' "$target_dir" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
+
+  if rg -n "^\[projects\\.\"$escaped_target\"\\]$" "$config_path" >/dev/null 2>&1; then
+    python3 - "$config_path" "$target_dir" "$trust_level" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+target = sys.argv[2]
+trust_level = sys.argv[3]
+text = path.read_text()
+pattern = re.compile(r'(\[projects\."%s"\]\ntrust_level = )"[^\n]+"' % re.escape(target))
+new_text, count = pattern.subn(r'\1"%s"' % trust_level, text, count=1)
+if count:
+    path.write_text(new_text)
+PY
+    echo "update $config_path"
+    return
+  fi
+
+  printf '\n[projects."%s"]\ntrust_level = "%s"\n' "$target_dir" "$trust_level" >> "$config_path"
+  echo "append $config_path"
+}
+
+copy_file() {
+  local src="$1"
+  local dst="$2"
+  mkdir -p "$(dirname "$dst")"
+  if [[ -e "$dst" && "$FORCE" -ne 1 ]]; then
+    echo "skip  $dst"
+    return
+  fi
+  cp "$src" "$dst"
+  echo "write $dst"
+}
+
+copy_skill_dir() {
+  local src_dir="$1"
+  local dst_root="$2"
+  mkdir -p "$dst_root"
+  local skill_name
+  for skill_name in "$src_dir"/*; do
+    [[ -d "$skill_name" ]] || continue
+    local dst_dir="$dst_root/$(basename "$skill_name")"
+    if [[ -e "$dst_dir" && "$FORCE" -ne 1 ]]; then
+      echo "skip  $dst_dir"
+      continue
+    fi
+    rm -rf "$dst_dir"
+    cp -R "$skill_name" "$dst_dir"
+    echo "write $dst_dir"
+  done
+}
+
+write_if_missing() {
+  local dst="$1"
+  local content="$2"
+  if [[ -e "$dst" && "$FORCE" -ne 1 ]]; then
+    echo "skip  $dst"
+    return
+  fi
+  mkdir -p "$(dirname "$dst")"
+  printf '%b\n' "$content" > "$dst"
+  echo "write $dst"
+}
+
+STACK="$(detect_stack "$TARGET_DIR")"
+STACK_OUTPUTS="$(stack_outputs "$STACK" | json_list)"
+STACK_RISKS="$(stack_risks "$STACK" | json_list)"
+
+copy_file "$TEMPLATE_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+copy_file "$TEMPLATE_DIR/.codex/AGENTS.md" "$TARGET_DIR/.codex/AGENTS.md"
+copy_file "$TEMPLATE_DIR/.codex/config.toml" "$TARGET_DIR/.codex/config.toml"
+copy_skill_dir "$TEMPLATE_DIR/.agents/skills" "$TARGET_DIR/.agents/skills"
+
+write_if_missing "$TARGET_DIR/.codex/context-scan.json" "{\n  \"generated_at\": \"$(date +%F)\",\n  \"project_root\": \"$TARGET_DIR\",\n  \"summary\": {\n    \"status\": \"initialized\",\n    \"detected_stack\": \"$STACK\"\n  },\n  \"relevant_findings\": [\n    \"Project initialized with codex-init-project.\",\n    \"Detected stack: $STACK\"\n  ]\n}"
+write_if_missing "$TARGET_DIR/.codex/context-current.json" "{\n  \"task\": \"Project initialized for Codex\",\n  \"inputs\": [\n    \"project files\",\n    \"root AGENTS.md\",\n    \"stack: $STACK\"\n  ],\n  \"expected_outputs\": [\n$STACK_OUTPUTS\n  ],\n  \"risks\": [\n$STACK_RISKS\n  ],\n  \"rollback\": [\n    \"Delete generated Codex files if initialization is not desired\"\n  ]\n}"
+write_if_missing "$TARGET_DIR/.codex/plan.md" "# Plan\n\n- [ ] Inspect the repository structure and key entry points.\n- [ ] Update .codex/context-* with task-specific findings.\n- [ ] Define acceptance criteria and rollback before implementation.\n- [ ] Implement changes in small reversible steps.\n- [ ] Run the relevant verification commands for the detected stack: $STACK."
+write_if_missing "$TARGET_DIR/.codex/operations-log.md" "# Operations Log\n\n- $(date +%F): Project initialized with codex-init-project.\n- $(date +%F): Detected stack -> $STACK."
+write_if_missing "$TARGET_DIR/.codex/verification.md" "# Verification\n\n- $(date +%F): Project initialized with codex-init-project.\n- Pending: run the first task's stack-specific verification commands."
+
+if [[ "$TRUST" -eq 1 ]]; then
+  register_project_trust "$TARGET_DIR" "$TRUST_LEVEL"
+fi
+
+echo "Initialized Codex project in: $TARGET_DIR"
